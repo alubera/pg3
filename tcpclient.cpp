@@ -73,6 +73,7 @@ int main(int argc, const char* argv[]){
 		exit(1);
 	}
 
+	close(s);
 	//next step is to write the server and use a case structure 
 	//with the operation buffer to decide what operation to do	
 }
