@@ -21,6 +21,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
+#include <mhash.h>
 #define MAX_BUFFER 4096
 #define MAX_PENDING 0
 
@@ -30,7 +31,9 @@ int main(int argc, char* argv[]) {
   char buf[MAX_BUFFER];             // message received from client
   int server_port;                  // user input - port num
   int s, new_s;                     // socket and new socket
-  int num_rec;                      // size of message received from client
+  int num_rec, num_sent;            // size of messages sent and received
+  MHASH td;                         // for computing MD5 hash
+  char hash[16];                    // for sending MD5 hash as 16-byte string
 
   // handle all arguments
   if (argc == 2) {
@@ -74,6 +77,12 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
+  // variables used in client server communication
+  short int fname_length;
+  char* fname;
+  FILE* fp;
+  int file_size;
+
   // wait to get a connection request from a client
   while (1) {
     if ((new_s = accept(s,(struct sockaddr *)&sin,&slen)) < 0) {
@@ -87,23 +96,105 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,"ERROR: receive error\n");
         exit(1);
       }
+
       // determine operation sent by client
       if (!strcmp(buf,"REQ")) {
+        // receive file name length
+        memset((char*)&buf,0,sizeof(buf));
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        fname_length = atoi(buf);
+        // use length to set mem for fname
+        fname = (char*)malloc(fname_length);
+        // receive file name string
+        memset((char*)&buf,0,sizeof(buf));
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        strcpy(fname,buf);
+        // find file and send size
+        if ((fp = fopen(fname,"r")) != NULL) {
+          // use fseek to get file size
+          fseek(fp,0,SEEK_END);
+          file_size = ftell(fp);
+          fseek(fp,0,SEEK_SET);
+        } else {
+          // file does not exist, send error response
+          file_size = -1;
+        }
+        memset((char*)&buf,0,sizeof(buf));
+        sprintf(buf,"%i",file_size);
+        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+        // if file does not exist, skip sending step
+        if (file_size == -1) continue;
+        // init mhash
+        if ((td = mhash_init(MHASH_MD5)) == MHASH_FAILED) {
+          fprintf(stderr,"ERROR: unable to initialize MHASH\n");
+          exit(1);
+        }
+        // read file into buffer, 4096 chars at a time
+        // send each buffer as well as adding to MD5 hash
+        memset((char*)&buf,0,sizeof(buf));
+        while (fread(buf,sizeof(char),MAX_BUFFER,fp)) {
+          if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+            fprintf(stderr,"ERROR: send error\n");
+            exit(1);         
+          }
+          mhash(td,buf,MAX_BUFFER);
+          memset((char*)&buf,0,sizeof(buf));
+        }
+        // compute MD5 hash string and send
+        mhash_deinit(td,hash);
+        if ((num_sent = send(new_s,hash,strlen(hash),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+        free(fname);
+        fclose(fp);
 
       } else if (!strcmp(buf,"UPL")) {
+        memset((char*)&buf,0,sizeof(buf));
+        // receive length of file name...then actual file name
+        // receive file
 
       } else if (!strcmp(buf,"DEL")) {
+        memset((char*)&buf,0,sizeof(buf));
+        // receive length of file name...then actual file name
+        // syscall remove(filename)
 
       } else if (!strcmp(buf,"LIS")) {
+        memset((char*)&buf,0,sizeof(buf));
+        // call system ls call
+        // send it back to the client
 
       } else if (!strcmp(buf,"MKD")) {
+        memset((char*)&buf,0,sizeof(buf));
+        // receive length of file name...then actual file name
+        // syscall mkdir(filename)
 
       } else if (!strcmp(buf,"RMD")) {
+        memset((char*)&buf,0,sizeof(buf));
+        // receive length of dir name...then actual dir name
+        // syscall rmdir(dirname)
 
       } else if (!strcmp(buf,"CHD")) {
+        memset((char*)&buf,0,sizeof(buf));
+        // expect to receive again for file name
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        // syscall chdir(path)
 
       } else if (!strcmp(buf,"XIT")) {
-
+        // break out of 
+        break;
       }
 
 
