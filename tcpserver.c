@@ -82,6 +82,7 @@ int main(int argc, char* argv[]) {
   char* fname;
   FILE* fp;
   int file_size;
+  int read;
 
   // wait to get a connection request from a client
   while (1) {
@@ -89,6 +90,7 @@ int main(int argc, char* argv[]) {
       fprintf(stderr,"ERROR: accept error\n");
       exit(1);
     }
+    printf("New client\n");
     // continue to receive messages after client connects until XIT
     while (1) {
       memset((char*)&buf,0,sizeof(buf));
@@ -99,13 +101,16 @@ int main(int argc, char* argv[]) {
 
       // determine operation sent by client
       if (!strcmp(buf,"REQ")) {
+        printf("Client opeartion: REQ\n");
         // receive file name length
         memset((char*)&buf,0,sizeof(buf));
         if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
+        printf("RECEIVED\n");
         fname_length = atoi(buf);
+        printf("\tFilename length: %i\n",fname_length);
         // use length to set mem for fname
         fname = (char*)malloc(fname_length);
         // receive file name string
@@ -115,6 +120,7 @@ int main(int argc, char* argv[]) {
           exit(1);
         }
         strcpy(fname,buf);
+        printf("\tFilename: %s\n",fname);
         // find file and send size
         if ((fp = fopen(fname,"r")) != NULL) {
           // use fseek to get file size
@@ -141,17 +147,25 @@ int main(int argc, char* argv[]) {
         // read file into buffer, 4096 chars at a time
         // send each buffer as well as adding to MD5 hash
         memset((char*)&buf,0,sizeof(buf));
-        while (fread(buf,sizeof(char),MAX_BUFFER,fp)) {
-          if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+        while ((read = fread(buf,sizeof(char),MAX_BUFFER,fp)) > 0) {
+          if ((num_sent = send(new_s,buf,read,0)) == -1) {
             fprintf(stderr,"ERROR: send error\n");
             exit(1);         
           }
+          printf("%i\t%i\t%i\n",read,strlen(buf),num_sent);
+          fflush(stdout);
           mhash(td,buf,MAX_BUFFER);
+          // wait for client to be ready for next message
+          memset((char*)&buf,0,sizeof(buf));
+          if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+            fprintf(stderr,"ERROR: receive error\n");
+            exit(1);
+          }
           memset((char*)&buf,0,sizeof(buf));
         }
         // compute MD5 hash string and send
         mhash_deinit(td,hash);
-        if ((num_sent = send(new_s,hash,strlen(hash),0)) == -1) {
+        if ((num_sent = send(new_s,hash,sizeof(hash),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
