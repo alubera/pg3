@@ -34,7 +34,7 @@ int main(int argc, const char* argv[]){
     const char* host_name = argv[1];
     int port_num = atoi(argv[2]);
     int s; //socket return code    
-    char buf[4096];
+    char buf[512];
     struct sockaddr_in client_addr;      
     struct timeval begin, end;
      
@@ -127,7 +127,7 @@ int main(int argc, const char* argv[]){
            
             //open new file pointer and keep writing to the file
             FILE *f;
-            f = fopen(file_name, "w+");
+            f = fopen(file_name, "a");
             if (f == NULL){
                 printf("Error opening the file\n");
             }
@@ -143,31 +143,42 @@ int main(int argc, const char* argv[]){
                 exit(1);
             }
             int total_rec = 0;
+            int rec_size = 0;
             gettimeofday(&begin,NULL);
+            int rec_count = 0;
+            int j;
             while(1){
                 fflush(stdout);
-                bzero(operation_buf, sizeof(buf));
-                if((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+
+                if(file_size - total_rec < 512){
+                    rec_size = file_size - total_rec;
+                } else {
+                    rec_size = sizeof(buf);
+                }
+
+                printf("%i", rec_size);
+                //receive the data
+                bzero(buf, sizeof(buf));
+                if((rec_bytes = recv(s, buf, rec_size, 0)) < 0){
                     printf("Error receiving file\n");
                     exit(1);
                 }
-                if ((send_val = send(s, "READY", 5, 0)) < 0){
-                    printf("Error sending ready string\n");
-                }
-               
+                rec_count++;
                 printf("recieved2: %i\n", rec_bytes); 
                 fflush(stdout);
                 total_rec = total_rec + rec_bytes;
                
-                mhash(td,buf,sizeof(buf)); 
+                mhash(td,buf,rec_size); 
                 //append new text to the file
-                fprintf(f, "%s", buf);
+                //fprintf(f, "%s", buf);
+                fwrite(buf, sizeof(char), rec_bytes, f);             
 
+                printf("String length of buf: %i ",strlen(buf));
                 if(total_rec >= file_size){
                     break;
                 }
             }
-
+            printf("RC: %i", rec_count);
             mhash_deinit(td, md5_hash_c); 
             gettimeofday(&end,NULL);
             unsigned int time = end.tv_usec - begin.tv_usec;
@@ -180,20 +191,26 @@ int main(int argc, const char* argv[]){
                 printf("Error receiving hash\n");
                 exit(1);
             }
+
+            printf("Received hash bytes: %i", rec_bytes);
             fclose(f); 
-            
+           
+            printf("Client hash: %i, Server hash: %i", strlen(md5_hash_c), strlen(md5_hash_s)); 
             printf("Client hash: %s, Server hash: %s", md5_hash_c, md5_hash_s);
-            
+            int i;
             //compare hashes
-            if (!strcmp(md5_hash_s, md5_hash_c)){
+            for (i=0; i<16; i++){
+                if(md5_hash_s[i] != md5_hash_c[i]){
+                    printf("File transfer unsuccessful\n");
+                    break;
+                }
+            }
+    
+            if(i == 16){
                 printf("File transfer successful\n");
-                printf("The throughput was %i bytes per sec", throughput);
-                continue;
-            } 
-          
-            printf("File transfer unsuccessful\n"); 
-            continue;
-        
+                printf("The throughput was %i bytes per sec\n", throughput);
+            }
+            printf("%s server hash:%s\n", md5_hash_c, md5_hash_s);
         } else if (!strcmp(operation_buf,"UPL")) {
 
 
@@ -210,6 +227,7 @@ int main(int argc, const char* argv[]){
             exit(1);
           } 
 
+        
           //loop to show directory listing
 
         } else if (!strcmp(operation_buf,"MKD")) {
