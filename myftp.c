@@ -201,12 +201,105 @@ int main(int argc, const char* argv[]){
 
         } else if (!strcmp(operation_buf,"LIS")){
 
+        int rec_bytes; //number of bytes received
+        bzero(buf, sizeof(buf));
+        //receive size from directory and loop to read directory
+        if((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+            printf("Error receiving!\n");
+            exit(1);
+        } 
+     
+        //loop to show directory listing
         
         } else if (!strcmp(operation_buf,"MKD")) {
 
+            char directory_name[4096];
+            short int dir_length;
+            char dir_length_str[4096];
+
+            printf("What is the directory name you would like to create?");
+            scanf("%s", directory_name);
+            dir_length = strlen(directory_name);
+            snprintf(dir_length_str, 4096, "%d", dir_length); //convert int to str
+        
+            //send the directory name length
+            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+                printf("Error writing file length to the server\n");
+                exit(1);
+            }
+
+            //send the directory name
+            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+                printf("Error writing the file length to the server\n");
+                exit(1);
+            }
+            int rec_bytes; //number of bytes received
+            bzero(buf, sizeof(buf));
+            //receive confirm from server
+            if ((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+                printf("Error receiving!\n");
+                exit(1);
+            }
+
+            //check confirms for return message
+            if(!strcmp(buf, "-2")){
+                printf("The directory already exists on server!\n");
+            } else if (!strcmp(buf, "-1")){
+                printf("Error in making directory\n");
+            } else {
+                printf("The directory was successfully made\n");
+            }
 
         } else if (!strcmp(operation_buf,"RMD")) {
+            char directory_name[4096];
+            short int dir_length;
+            char dir_length_str[4096];
 
+            printf("What is the directory name you would like to remove?");
+            scanf("%s", directory_name);
+            dir_length = strlen(directory_name);
+            snprintf(dir_length_str, 4096, "%d", dir_length); //convert int to str
+        
+            //send the directory name length
+            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+                printf("Error writing file length to the server\n");
+                exit(1);
+            }
+
+            //send the directory name
+            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+                printf("Error writing the file length to the server\n");
+                exit(1);
+            }
+            int rec_bytes; //number of bytes received
+            bzero(buf, sizeof(buf));
+            //receive confirm from server
+            if ((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+                printf("Error receiving!\n");
+                exit(1);
+            }
+
+            char confirm[5];
+            //check confirms for return message
+            if(!strcmp(buf, "-1")){
+                printf("The directory does not exist on server!\n");
+            } else {
+                while(1){
+                    printf("Are you sure you want to delete the directory? Yes or No? \n");
+                    scanf("%s", confirm);
+                    if(!strcmp(confirm, "Yes")){
+                       //send stuff to server wait display info 
+
+                       break; 
+
+                    } else if (!strcmp(confirm, "No")){
+                        printf("Delete abandoned by the user!\n");
+                        break;
+                    } else{
+                        printf("You did not enter a valid response, try again\n");
+                    }
+                }
+            } 
 
         } else if (!strcmp(operation_buf,"CHD")) {
 
