@@ -24,7 +24,7 @@
 #include <errno.h>
 #include <mhash.h>
 #include <dirent.h>
-#define MAX_BUFFER 4096
+#define MAX_BUFFER 512
 #define MAX_PENDING 0
 
 int my_ls(char* file_list) {
@@ -175,21 +175,17 @@ int main(int argc, char* argv[]) {
         }
         // read file into buffer, 4096 chars at a time
         // send each buffer as well as adding to MD5 hash
+        int count = 0;
         memset((char*)&buf,0,sizeof(buf));
         while ((read = fread(buf,sizeof(char),MAX_BUFFER,fp)) > 0) {
           if ((num_sent = send(new_s,buf,read,0)) == -1) {
             fprintf(stderr,"ERROR: send error\n");
             exit(1);         
           }
-          printf("%i\t%i\t%i\n",read,strlen(buf),num_sent);
+          printf("%i\t%i\t%i\t%i\n",++count,read,strlen(buf),num_sent);
           fflush(stdout);
-          mhash(td,buf,MAX_BUFFER);
+          mhash(td,buf,read);
           // wait for client to be ready for next message
-          memset((char*)&buf,0,sizeof(buf));
-          if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
-            fprintf(stderr,"ERROR: receive error\n");
-            exit(1);
-          }
           memset((char*)&buf,0,sizeof(buf));
         }
         // compute MD5 hash string and send
@@ -293,8 +289,77 @@ int main(int argc, char* argv[]) {
          *
          **********************************/
         memset((char*)&buf,0,sizeof(buf));
-        // receive length of dir name...then actual dir name
-        // syscall rmdir(dirname)
+        printf("Client opeartion: RMD\n");
+        // receive directory name length
+        memset((char*)&buf,0,sizeof(buf));
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        fname_length = atoi(buf);
+        printf("\tDirectory name length: %i\n",fname_length);
+        // use length to set mem for fname
+        fname = (char*)malloc(fname_length);
+        memset(fname,0,fname_length);
+        // receive directory name string
+        memset((char*)&buf,0,sizeof(buf));
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        strcpy(fname,"./");
+        strcat(fname,buf);
+        strcat(fname,"/");
+        printf("\tDirectory name: %s\n",fname);
+        memset((char*)&buf,0,sizeof(buf));
+        // check to see if directory exists
+        if (access(fname,F_OK) != 0) {
+          if (errno == ENOENT || errno == ENOTDIR) {
+            // name provided is not a directory
+            sprintf(buf,"%i",-1);
+          } else {
+            // directory exists
+            sprintf(buf,"%i",1);
+          }
+        } else {
+          // some other error accessing directory
+          sprintf(buf,"%i",-1);
+        }
+        // send confirm message
+        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+        memset((char*)&buf,0,sizeof(buf));
+        // receive confirmation that client wants to delete
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        /*if () {
+          // user DOES NOT want to continue with delete
+          continue;
+        }*/
+        // use rmdir to remove directory
+        if (rmdir(fname) < 0) {
+          // send back -2 if directory already exists
+          if (errno == EEXIST) {
+            printf("Directory already exists\n");
+            sprintf(buf,"%i",-2);
+          // send back -1 if theres another error
+          } else {
+            sprintf(buf,"%i",-1);
+          }
+        } else {
+          // send back 1 if directory is created successfully
+          sprintf(buf,"%i",1);
+        }
+        // send response message
+        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+        free(fname);
 
       } else if (!strcmp(buf,"CHD")) {
         /**********************************
