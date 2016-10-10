@@ -18,12 +18,36 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
 #include <mhash.h>
+#include <dirent.h>
 #define MAX_BUFFER 4096
 #define MAX_PENDING 0
+
+int my_ls(char* file_list) {
+  DIR *dp;
+  struct dirent *ep;
+  int space = sizeof(file_list);
+  
+  dp = opendir("./");
+  if (dp != NULL) {
+    while (ep = readdir(dp)) {
+      strncat(file_list,ep->d_name,space);
+      if ((space = space-sizeof(ep->d_name)) < 2) {
+        printf("too many file names to print\n");
+        break;
+      }
+      strcat(file_list,"\n");
+    }
+    closedir(dp);
+  } else {
+    return -1;
+  }
+  return 0;
+}
 
 int main(int argc, char* argv[]) {
   struct sockaddr_in sin;           // struct for address info
@@ -101,6 +125,11 @@ int main(int argc, char* argv[]) {
 
       // determine operation sent by client
       if (!strcmp(buf,"REQ")) {
+        /**********************************
+         *
+         *  REQUEST OPERATION
+         *
+         **********************************/
         printf("Client opeartion: REQ\n");
         // receive file name length
         memset((char*)&buf,0,sizeof(buf));
@@ -108,11 +137,11 @@ int main(int argc, char* argv[]) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
-        printf("RECEIVED\n");
         fname_length = atoi(buf);
         printf("\tFilename length: %i\n",fname_length);
         // use length to set mem for fname
         fname = (char*)malloc(fname_length);
+        memset(fname,0,fname_length);
         // receive file name string
         memset((char*)&buf,0,sizeof(buf));
         if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
@@ -173,32 +202,107 @@ int main(int argc, char* argv[]) {
         fclose(fp);
 
       } else if (!strcmp(buf,"UPL")) {
+        /**********************************
+         *
+         *  UPLOAD OPERATION
+         *
+         **********************************/
         memset((char*)&buf,0,sizeof(buf));
         // receive length of file name...then actual file name
         // receive file
 
       } else if (!strcmp(buf,"DEL")) {
+        /**********************************
+         *
+         *  DELETE OPERATION
+         *
+         **********************************/
         memset((char*)&buf,0,sizeof(buf));
         // receive length of file name...then actual file name
         // syscall remove(filename)
 
       } else if (!strcmp(buf,"LIS")) {
+        /**********************************
+         *
+         *  LIST OPERATION
+         *
+         **********************************/
+        printf("Client opeartion: REQ\n");
         memset((char*)&buf,0,sizeof(buf));
-        // call system ls call
+        // call listing function
+        if (my_ls(buf) < 0) { 
+          fprintf(stderr,"ERROR: could not list directory\n");
+          continue;
+        }
         // send it back to the client
 
       } else if (!strcmp(buf,"MKD")) {
+        /**********************************
+         *
+         *  MK DIR OPERATION
+         *
+         **********************************/
         memset((char*)&buf,0,sizeof(buf));
-        // receive length of file name...then actual file name
-        // syscall mkdir(filename)
+        printf("Client opeartion: MKD\n");
+        // receive directory name length
+        memset((char*)&buf,0,sizeof(buf));
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        fname_length = atoi(buf);
+        printf("\tDirectory name length: %i\n",fname_length);
+        // use length to set mem for fname
+        fname = (char*)malloc(fname_length);
+        memset(fname,0,fname_length);
+        // receive directory name string
+        memset((char*)&buf,0,sizeof(buf));
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        strcpy(fname,"./");
+        strcat(fname,buf);
+        printf("\tDirectory name: %s\n",fname);
+        memset((char*)&buf,0,sizeof(buf));
+        // use mkdir to make directory
+        if (mkdir(fname,S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) < 0) {
+          // send back -2 if directory already exists
+          if (errno == EEXIST) {
+            printf("Directory already exists\n");
+            sprintf(buf,"%i",-2);
+          // send back -1 if theres another error
+          } else {
+            sprintf(buf,"%i",-1);
+          }
+        } else {
+          // send back 1 if directory is created successfully
+          sprintf(buf,"%i",1);
+        }
+        // send response message
+        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+        free(fname);
 
       } else if (!strcmp(buf,"RMD")) {
+         /**********************************
+         *
+         *  RM DIR OPERATION
+         *
+         **********************************/
         memset((char*)&buf,0,sizeof(buf));
         // receive length of dir name...then actual dir name
         // syscall rmdir(dirname)
 
       } else if (!strcmp(buf,"CHD")) {
-        memset((char*)&buf,0,sizeof(buf));
+        /**********************************
+         *
+         *  CH DIR OPERATION
+         *
+         **********************************/
+       memset((char*)&buf,0,sizeof(buf));
         // expect to receive again for file name
         if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
@@ -207,19 +311,11 @@ int main(int argc, char* argv[]) {
         // syscall chdir(path)
 
       } else if (!strcmp(buf,"XIT")) {
-        // break out of 
+        // break out of client loop
+        printf("client exited\n");
         break;
       }
-
-
-      // send back to client
-/*      if (sendto(s,buf,num_rec,0,(struct sockaddr*)&client_addr,sizeof(struct sockaddr)) == -1) {
-        fprintf(stderr,"ERROR: server send error: %s\n",strerror(errno));
-        exit(1);
-      }
-*/
     }
-
   }
 
   close(s);

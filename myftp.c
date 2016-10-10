@@ -66,6 +66,7 @@ int main(int argc, const char* argv[]){
     while(1){
         //Prompt user for operation
         printf("Hello, please enter an operation: REQ, UPL, DEL, LIS, MKD, RMD, CHD, XIT:\n");
+        fflush(stdout);
 
         char operation_buf[4]; //operation buf to send to server
         bzero(operation_buf, sizeof(operation_buf));
@@ -201,35 +202,35 @@ int main(int argc, const char* argv[]){
 
         } else if (!strcmp(operation_buf,"LIS")){
 
-        int rec_bytes; //number of bytes received
-        bzero(buf, sizeof(buf));
-        //receive size from directory and loop to read directory
-        if((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+          int rec_bytes; //number of bytes received
+          bzero(buf, sizeof(buf));
+          //receive size from directory and loop to read directory
+          if((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
             printf("Error receiving!\n");
             exit(1);
-        } 
-     
-        //loop to show directory listing
-        
+          } 
+
+          //loop to show directory listing
+
         } else if (!strcmp(operation_buf,"MKD")) {
 
             char directory_name[4096];
             short int dir_length;
             char dir_length_str[4096];
 
-            printf("What is the directory name you would like to create?");
+            printf("What is the directory name you would like to create? ");
             scanf("%s", directory_name);
             dir_length = strlen(directory_name);
             snprintf(dir_length_str, 4096, "%d", dir_length); //convert int to str
         
             //send the directory name length
-            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+            if ((send_val = send(s, dir_length_str, strlen(dir_length_str) ,0)) < 0){
                 printf("Error writing file length to the server\n");
                 exit(1);
             }
 
             //send the directory name
-            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+            if ((send_val = send(s, directory_name, strlen(directory_name) ,0)) < 0){
                 printf("Error writing the file length to the server\n");
                 exit(1);
             }
@@ -306,7 +307,8 @@ int main(int argc, const char* argv[]){
 
         } else if (!strcmp(operation_buf,"XIT")) {
             close(s);
-            printf("Session has been closed, have a nice day.");
+            printf("Session has been closed, have a nice day.\n");
+            break;
         }
     }
 
