@@ -156,7 +156,6 @@ int main(int argc, const char* argv[]){
                     rec_size = sizeof(buf);
                 }
 
-                printf("%i", rec_size);
                 //receive the data
                 bzero(buf, sizeof(buf));
                 if((rec_bytes = recv(s, buf, rec_size, 0)) < 0){
@@ -164,7 +163,7 @@ int main(int argc, const char* argv[]){
                     exit(1);
                 }
                 rec_count++;
-                printf("recieved2: %i\n", rec_bytes); 
+                //printf("recieved2: %i\n", rec_bytes); 
                 fflush(stdout);
                 total_rec = total_rec + rec_bytes;
                
@@ -173,7 +172,7 @@ int main(int argc, const char* argv[]){
                 //fprintf(f, "%s", buf);
                 fwrite(buf, sizeof(char), rec_bytes, f);             
 
-                printf("String length of buf: %i ",strlen(buf));
+               // printf("String length of buf: %i ",strlen(buf));
                 if(total_rec >= file_size){
                     break;
                 }
@@ -192,11 +191,11 @@ int main(int argc, const char* argv[]){
                 exit(1);
             }
 
-            printf("Received hash bytes: %i", rec_bytes);
+            //printf("Received hash bytes: %i", rec_bytes);
             fclose(f); 
            
-            printf("Client hash: %i, Server hash: %i", strlen(md5_hash_c), strlen(md5_hash_s)); 
-            printf("Client hash: %s, Server hash: %s", md5_hash_c, md5_hash_s);
+            //printf("Client hash: %i, Server hash: %i", strlen(md5_hash_c), strlen(md5_hash_s)); 
+            //printf("Client hash: %s, Server hash: %s", md5_hash_c, md5_hash_s);
             int i;
             //compare hashes
             for (i=0; i<16; i++){
@@ -226,8 +225,7 @@ int main(int argc, const char* argv[]){
             printf("Error receiving!\n");
             exit(1);
           } 
-
-        
+ 
           //loop to show directory listing
 
         } else if (!strcmp(operation_buf,"MKD")) {
@@ -307,9 +305,19 @@ int main(int argc, const char* argv[]){
                     printf("Are you sure you want to delete the directory? Yes or No? \n");
                     scanf("%s", confirm);
                     if(!strcmp(confirm, "Yes")){
-                       //send stuff to server wait display info 
-
-                       break; 
+                        //send stuff to server wait display info 
+                        if((send_val = send(s, "Yes", 3, 0)) < 0){
+                            printf("Error sending to server\n");
+                            exit(1);
+                        }
+                        bzero(buf, sizeof(buf));
+                        if ((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+                            printf("Error receiving!\n");
+                            exit(1); 
+                        }
+                        //print out the delete confirmation msg from server
+                        printf("%s", buf);
+                        break; 
 
                     } else if (!strcmp(confirm, "No")){
                         printf("Delete abandoned by the user!\n");
@@ -322,6 +330,35 @@ int main(int argc, const char* argv[]){
 
         } else if (!strcmp(operation_buf,"CHD")) {
 
+            char directory_name[4096];
+            short int dir_length;
+            char dir_length_str[4096];
+           
+            printf("What is the directory you would like to change to?\n");
+            scanf("%s", directory_name);
+            dir_length = strlen(directory_name);
+            snprintf(dir_length_str, 4096, "%d", dir_length); //conv to str
+           
+            //send the directory name length
+            if ((send_val = send(s, dir_length_str, strlen(dir_length_str) ,0)) < 0){
+                printf("Error writing file length to the server\n");
+                exit(1);
+            }
+           
+            //send the directory name 
+            if ((send_val = send(s, directory_name, strlen(directory_name) ,0)) < 0){
+                printf("Error writing the file length to the server\n");
+                exit(1);
+            }  
+
+            //confirms from the server
+            if(!strcmp(buf, "-2")){
+                printf("The directory does not exist on the server!\n");
+            } else if (!strcmp(buf, "-1")){
+                printf("Error in changing directory\n");
+            } else {
+                printf("The directory was successfully made\n");
+            }            
 
         } else if (!strcmp(operation_buf,"XIT")) {
             close(s);
