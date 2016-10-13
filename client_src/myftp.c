@@ -47,9 +47,9 @@ int main(int argc, const char* argv[]){
     //translate host name into peer's IP address
     hp = gethostbyname(host_name);
     if (!hp){
-                fprintf(stderr, "simplex-talk unknown host: %s\n", host_name);
-                exit(1);
-        }        
+        fprintf(stderr, "simplex-talk unknown host: %s\n", host_name);
+        exit(1);
+    }        
 
     //set addess and port number
     memset((char*)&sin, 0, sizeof(sin)); //make sure to clear mem beforehand
@@ -63,17 +63,24 @@ int main(int argc, const char* argv[]){
         exit(1);
     }
 
+
+    char operation_buf[4]; //operation buf to send to server
+    short int name_length;
+    char name_length_str[4096];
+    char file_name[4096];
+    int send_val;
+    int rec_bytes; //number of bytes received
+    int file_size;
+
     while(1){
         //Prompt user for operation
         printf("Hello, please enter an operation: REQ, UPL, DEL, LIS, MKD, RMD, CHD, XIT:\n");
         fflush(stdout);
 
-        char operation_buf[4]; //operation buf to send to server
         bzero(operation_buf, sizeof(operation_buf));
         //fgets(operation_buf, 4, stdin); //put request into buffer
         scanf("%s",operation_buf);
 
-        int send_val;
 
         //send the buffer to the server
         if ((send_val = send(s, operation_buf, strlen(operation_buf),0)) < 0){
@@ -81,20 +88,18 @@ int main(int argc, const char* argv[]){
             exit(1);
         }
 
-        short int name_length;
-        char name_length_str[4096];
-        char file_name[4096];
-
         if (!strcmp(operation_buf, "REQ")){ 
             printf("What is the file name you want to request?\n");
             scanf("%s", file_name);
             //fgets(file_name, 4096, stdin);
             name_length = strlen(file_name);
-            snprintf(name_length_str, 4096, "%d", name_length); //convert int to str
-            printf("%s %s", name_length_str, file_name);
+            //snprintf(name_length_str, 4096, "%d", name_length); //convert int to str
+            printf("%i %s\n", name_length, file_name);
             fflush(stdout); 
+
             //send the file name length
-            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+            name_length = htons(name_length);
+            if ((send_val = send(s,&name_length,sizeof(short int),0)) < 0){
                 printf("Error writing file length to the server\n");      
                 exit(1);
             }
@@ -105,8 +110,6 @@ int main(int argc, const char* argv[]){
                 exit(1);
             }
 
-            int rec_bytes; //number of bytes received
-            int file_size;
             socklen_t addr_len;
             addr_len = sizeof(client_addr);
 

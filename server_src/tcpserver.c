@@ -131,17 +131,19 @@ int main(int argc, char* argv[]) {
          *
          **********************************/
         printf("Client opeartion: REQ\n");
+
         // receive file name length
-        memset((char*)&buf,0,sizeof(buf));
-        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+        if ((num_rec = recv(new_s,&fname_length,sizeof(short int),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
-        fname_length = atoi(buf);
+        fname_length = ntohs(fname_length);
         printf("\tFilename length: %i\n",fname_length);
+
         // use length to set mem for fname
         fname = (char*)malloc(fname_length);
         memset(fname,0,fname_length);
+
         // receive file name string
         memset((char*)&buf,0,sizeof(buf));
         if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
@@ -150,6 +152,7 @@ int main(int argc, char* argv[]) {
         }
         strcpy(fname,buf);
         printf("\tFilename: %s\n",fname);
+
         // find file and send size
         if ((fp = fopen(fname,"r")) != NULL) {
           // use fseek to get file size
@@ -168,11 +171,13 @@ int main(int argc, char* argv[]) {
         }
         // if file does not exist, skip sending step
         if (file_size == -1) continue;
+
         // init mhash
         if ((td = mhash_init(MHASH_MD5)) == MHASH_FAILED) {
           fprintf(stderr,"ERROR: unable to initialize MHASH\n");
           exit(1);
         }
+
         // read file into buffer, 4096 chars at a time
         // send each buffer as well as adding to MD5 hash
         int count = 0;
@@ -188,12 +193,14 @@ int main(int argc, char* argv[]) {
           // wait for client to be ready for next message
           memset((char*)&buf,0,sizeof(buf));
         }
+
         // compute MD5 hash string and send
         mhash_deinit(td,hash);
         if ((num_sent = send(new_s,hash,sizeof(hash),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
+
         free(fname);
         fclose(fp);
 
