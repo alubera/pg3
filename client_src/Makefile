@@ -1,11 +1,11 @@
 all: client server
 
-client: myftp.c
-	gcc myftp.c -o client -lmhash
+client: ../client_src/myftp.c
+	gcc ../client_src/myftp.c -o ../client_src/client -lmhash
 
-server: tcpserver.c
-	gcc tcpserver.c -o server -lmhash
+server: ../server_src/tcpserver.c
+	gcc ../server_src/tcpserver.c -o ../server_src/server -lmhash
 
 clean:
-	rm server
-	rm client
+	rm ../server_src/server
+	rm ../client_src/client
