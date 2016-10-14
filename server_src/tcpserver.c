@@ -163,12 +163,14 @@ int main(int argc, char* argv[]) {
           // file does not exist, send error response
           file_size = -1;
         }
-        memset((char*)&buf,0,sizeof(buf));
-        sprintf(buf,"%i",file_size);
-        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+        //memset((char*)&buf,0,sizeof(buf));
+        //sprintf(buf,"%i",file_size);
+        file_size = htonl(file_size);
+        if ((num_sent = send(new_s,file_size,sizeof(int),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
+        file_size = ntohl(file_size);
         // if file does not exist, skip sending step
         if (file_size == -1) continue;
 

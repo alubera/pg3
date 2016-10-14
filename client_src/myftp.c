@@ -71,6 +71,7 @@ int main(int argc, const char* argv[]){
     int send_val;
     int rec_bytes; //number of bytes received
     int file_size;
+    socklen_t addr_len;
 
     while(1){
         //Prompt user for operation
@@ -110,22 +111,20 @@ int main(int argc, const char* argv[]){
                 exit(1);
             }
 
-            socklen_t addr_len;
             addr_len = sizeof(client_addr);
-
+   
             //recieve the 32-bit size, decode
             if((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
                 printf("Error receiving!\n");
                 exit(1);
-            }         
+            }
+            file_size = ntohl(file_size);
 
-            printf("received: %s\n", buf);
+            printf("received: %i\n", file_size);
 
-            if(!strcmp(buf,"-1")){
+            if(file_size == -1) {
                 printf("File does not exist on the server\n");
                 continue;
-            } else{ //set the file size equal to the buf we just received
-                file_size = atoi(buf);
             }
            
             //open new file pointer and keep writing to the file
