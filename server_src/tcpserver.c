@@ -213,8 +213,46 @@ int main(int argc, char* argv[]) {
          *  UPLOAD OPERATION
          *
          **********************************/
+        printf("Client opeartion: UPL\n");
+
+        // receive file name length
+        if ((num_rec = recv(new_s,&fname_length,sizeof(short int),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        fname_length = ntohs(fname_length);
+        printf("\tFilename length: %i\n",fname_length);
+
+        // use length to set mem for fname
+        fname = (char*)malloc(fname_length);
+        memset(fname,0,fname_length);
+
+        // receive file name string
         memset((char*)&buf,0,sizeof(buf));
-        // receive length of file name...then actual file name
+        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        strcpy(fname,buf);
+        printf("\tFilename: %s\n",fname);
+
+        short int ack = htons(1);
+        // send acknowledgement that server is ready to receive
+        if ((num_sent = send(new_s,&ack,sizeof(ack),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+
+        // receive file size
+        if ((num_rec = recv(new_s,&file_size,sizeof(file_size),0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        file_size = ntohl(file_size);
+        printf("\tFile size: %i\n",file_size);
+       
+        
+
         // receive file
 
       } else if (!strcmp(buf,"DEL")) {
