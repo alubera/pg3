@@ -376,7 +376,7 @@ int main(int argc, char* argv[]) {
          *  CH DIR OPERATION
          *
          **********************************/
-       memset((char*)&buf,0,sizeof(buf));
+        memset((char*)&buf,0,sizeof(buf));
         // expect to receive again for file name
         if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
