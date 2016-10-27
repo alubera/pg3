@@ -24,13 +24,13 @@
 #include <errno.h>
 #include <mhash.h>
 #include <dirent.h>
-#define MAX_BUFFER 512
+#define MAX_BUFFER 4096
 #define MAX_PENDING 0
 
 int my_ls(char* file_list) {
   DIR *dp;
   struct dirent *ep;
-  int space = sizeof(file_list);
+  int space = MAX_BUFFER;
   
   dp = opendir("./");
   if (dp != NULL) {
@@ -233,14 +233,28 @@ int main(int argc, char* argv[]) {
          *  LIST OPERATION
          *
          **********************************/
-        printf("Client opeartion: REQ\n");
+        printf("Client opeartion: LIS\n");
+
         memset((char*)&buf,0,sizeof(buf));
         // call listing function
         if (my_ls(buf) < 0) { 
           fprintf(stderr,"ERROR: could not list directory\n");
           continue;
         }
-        // send it back to the client
+
+        // send size of listing to client
+        file_size = htonl(strlen(buf));
+        if ((num_sent = send(new_s,&file_size,sizeof(file_size),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+        file_size = ntohl(file_size);
+
+        // send listing back to the client
+        if ((num_sent = send(new_s,buf,file_size,0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
 
       } else if (!strcmp(buf,"MKD")) {
         /**********************************
