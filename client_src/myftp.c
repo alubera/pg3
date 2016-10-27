@@ -34,7 +34,7 @@ int main(int argc, const char* argv[]){
     const char* host_name = argv[1];
     int port_num = atoi(argv[2]);
     int s; //socket return code    
-    char buf[512];
+    char buf[4096];
     struct sockaddr_in client_addr;      
     struct timeval begin, end;
      
@@ -59,7 +59,7 @@ int main(int argc, const char* argv[]){
 
     //create connection
     if (connect(s, (struct sockaddr *) &sin, sizeof(sin)) < 0){
-        printf("Error with connecting");
+        printf("Error with connecting\n");
         exit(1);
     }
 
@@ -153,7 +153,7 @@ int main(int argc, const char* argv[]){
             while(1){
                 fflush(stdout);
 
-                if(file_size - total_rec < 512){
+                if(file_size - total_rec < 4096){
                     rec_size = file_size - total_rec;
                 } else {
                     rec_size = sizeof(buf);
@@ -183,11 +183,10 @@ int main(int argc, const char* argv[]){
             printf("RC: %i", rec_count);
             mhash_deinit(td, md5_hash_c); 
             gettimeofday(&end,NULL);
-            unsigned int time = end.tv_usec - begin.tv_usec;
+            int time = end.tv_usec - begin.tv_usec;
             float throughput;
-            printf("Time: %d file_size: %i", time, file_size);
-            throughput = file_size/(time*10^-6);
-
+            printf("Time: %i file_size: %i", time, file_size);
+            throughput = file_size/time;
             //receive the hash of the file and save
             char md5_hash_s[16]; 
             if((rec_bytes = recv(s, md5_hash_s, sizeof(md5_hash_s), 0)) < 0){
@@ -211,20 +210,62 @@ int main(int argc, const char* argv[]){
     
             if(i == 16){
                 printf("File transfer successful\n");
-                printf("The throughput was %i bytes per sec\n", throughput);
+                printf("The throughput was %f bytes per sec\n", throughput*1000000);
             }
             printf("%s server hash:%s\n", md5_hash_c, md5_hash_s);
 
         } else if (!strcmp(operation_buf,"UPL")) {
+            char file_name[4096];
+            short int file_size;
+            printf("What is the file name you would like to upload?");
+            scanf("%s", file_name);
+            file_size = strlen(file_name);
+            file_size = htons(file_size);
 
+            //send length of the file name
+            if ((send_val = send(s, &file_size, sizeof(short int), 0)) < 0){
+                printf("Error sending file name length\n");
+                exit(1);
+            }
 
+            //send file name
+            if ((send_val = send(s, file_name, strlen(file_name), 0)) < 0){
+                printf("Error sending file name\n");
+                exit(1);
+            }
+
+            short int ack;
+
+            //receive 1-short int for acknowledgement
+            if ((rec_bytes = recv(s, &ack, sizeof(short int), 0)) <0){
+                printf("Error receiving!\n");
+                exit(1);
+            }
+
+            //find file and send size
+
+  
         } else if (!strcmp(operation_buf,"DEL")) {
 
 
         } else if (!strcmp(operation_buf,"LIS")){
 
-          //receive size from directory and loop to read directory
-          //loop to show directory listing
+            int resp2;
+
+            //recieve int and char array
+            if ((rec_bytes = recv(s, &resp2, sizeof(int), 0)) < 0){   
+                printf("Error receiving\n");
+                exit(1);
+            }
+           
+            resp2 = ntohl(resp2);
+            bzero(buf, sizeof(buf));
+            if ((rec_bytes = recv(s, buf, resp2, 0)) < 0){
+                printf("Error receiving\n");
+                exit(1);
+            }     
+
+            printf("%s\n", buf);
 
         } else if (!strcmp(operation_buf,"MKD")) {
 
@@ -350,13 +391,21 @@ int main(int argc, const char* argv[]){
                 exit(1);
             }  
 
+            int resp1;
+            if ((rec_bytes = recv(s, &resp1, sizeof(int), 0)) < 0){
+                printf("Erro receiving!\n");
+                exit(1);
+            }
+
+            resp1 = ntohl(resp1);
+
             //confirms from the server
-            if(!strcmp(buf, "-2")){
+            if(resp1 == -2){
                 printf("The directory does not exist on the server!\n");
-            } else if (!strcmp(buf, "-1")){
+            } else if (resp1 == -1){
                 printf("Error in changing directory\n");
             } else {
-                printf("The directory was successfully made\n");
+                printf("The directory was successfully transfered to\n");
             }            
 
         } else if (!strcmp(operation_buf,"XIT")) {
