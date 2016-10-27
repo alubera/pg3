@@ -185,6 +185,7 @@ int main(int argc, const char* argv[]){
             gettimeofday(&end,NULL);
             unsigned int time = end.tv_usec - begin.tv_usec;
             float throughput;
+            printf("Time: %d file_size: %i", time, file_size);
             throughput = file_size/(time*10^-6);
 
             //receive the hash of the file and save
@@ -272,30 +273,33 @@ int main(int argc, const char* argv[]){
             printf("What is the directory name you would like to remove?");
             scanf("%s", directory_name);
             dir_length = strlen(directory_name);
-            snprintf(dir_length_str, 4096, "%d", dir_length); //convert int to str
+            dir_length = htons(dir_length);
         
             //send the directory name length
-            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+            if ((send_val = send(s, &dir_length, sizeof(short int) ,0)) < 0){
                 printf("Error writing file length to the server\n");
                 exit(1);
             }
 
             //send the directory name
-            if ((send_val = send(s, name_length_str, strlen(name_length_str) ,0)) < 0){
+            if ((send_val = send(s, directory_name, strlen(directory_name) ,0)) < 0){
                 printf("Error writing the file length to the server\n");
                 exit(1);
             }
             int rec_bytes; //number of bytes received
             bzero(buf, sizeof(buf));
+            int resp; // the server's confirm
             //receive confirm from server
-            if ((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+            if ((rec_bytes = recv(s, &resp, sizeof(int), 0)) < 0){
                 printf("Error receiving!\n");
                 exit(1);
             }
-
+       
+            //printf("Received: %i", resp); 
+            resp = ntohl(resp);
             char confirm[5];
             //check confirms for return message
-            if(!strcmp(buf, "-1")){
+            if(resp == -1){
                 printf("The directory does not exist on server!\n");
             } else {
                 while(1){
@@ -329,15 +333,13 @@ int main(int argc, const char* argv[]){
 
             char directory_name[4096];
             short int dir_length;
-            char dir_length_str[4096];
            
             printf("What is the directory you would like to change to?\n");
             scanf("%s", directory_name);
             dir_length = strlen(directory_name);
-            snprintf(dir_length_str, 4096, "%d", dir_length); //conv to str
-           
+            dir_length = htons(dir_length); 
             //send the directory name length
-            if ((send_val = send(s, dir_length_str, strlen(dir_length_str) ,0)) < 0){
+            if ((send_val = send(s, &dir_length, sizeof(short int) ,0)) < 0){
                 printf("Error writing file length to the server\n");
                 exit(1);
             }
