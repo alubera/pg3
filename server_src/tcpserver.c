@@ -378,13 +378,59 @@ int main(int argc, char* argv[]) {
          *  CH DIR OPERATION
          *
          **********************************/
-        memset((char*)&buf,0,sizeof(buf));
-        // expect to receive again for file name
-        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+        printf("Client opeartion: CHD\n");
+
+        // receive directory name length
+        if ((num_rec = recv(new_s,&fname_length,sizeof(short int),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
-        // syscall chdir(path)
+        fname_length = ntohs(fname_length);
+        printf("\tDirectory name length: %i\n",fname_length);
+
+        // use length to set mem for fname
+        fname = (char*)malloc(fname_length+2);
+        memset(fname,0,fname_length);
+
+        // receive directory name string
+        memset((char*)&buf,0,sizeof(buf));
+        if ((num_rec = recv(new_s,buf,fname_length,0)) == -1) {
+          fprintf(stderr,"ERROR: receive error\n");
+          exit(1);
+        }
+        strcpy(fname,"./");
+        strncat(fname,buf,fname_length);
+        printf("\tDirectory name: %s\n",fname);
+        memset((char*)&buf,0,sizeof(buf));
+
+        // check to see if directory exists
+        if (access(fname,F_OK) < 0) {
+          // could not access directory
+          response = htonl(-2);
+          printf("name is not a directory\n");
+        } else {
+          // directory exists attempt to cd
+          printf("directory exists\n");
+          if (chdir(fname) < 0) {
+            // could not cd
+            printf("could not cd\n");
+            response = htonl(-1);
+          } else {
+            // successful cd
+            printf("changed directory to %s\n", fname);
+            printf("%s", get_current_dir_name());
+            fflush(stdout);
+            response = htonl(1);
+          }
+        }
+
+        // send confirm message
+        if ((num_sent = send(new_s,&response,sizeof(response),0)) == -1) {
+          fprintf(stderr,"ERROR: send error\n");
+          exit(1);         
+        }
+
+        free(fname);
 
       } else if (!strcmp(buf,"XIT")) {
         // break out of client loop
