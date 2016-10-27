@@ -72,6 +72,7 @@ int main(int argc, const char* argv[]){
     int rec_bytes; //number of bytes received
     int file_size;
     socklen_t addr_len;
+    int response;
 
     while(1){
         //Prompt user for operation
@@ -114,7 +115,7 @@ int main(int argc, const char* argv[]){
             addr_len = sizeof(client_addr);
    
             //recieve the 32-bit size, decode
-            if((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+            if((rec_bytes = recv(s,&file_size,sizeof(int),0)) < 0){
                 printf("Error receiving!\n");
                 exit(1);
             }
@@ -212,6 +213,7 @@ int main(int argc, const char* argv[]){
                 printf("The throughput was %i bytes per sec\n", throughput);
             }
             printf("%s server hash:%s\n", md5_hash_c, md5_hash_s);
+
         } else if (!strcmp(operation_buf,"UPL")) {
 
 
@@ -220,14 +222,7 @@ int main(int argc, const char* argv[]){
 
         } else if (!strcmp(operation_buf,"LIS")){
 
-          int rec_bytes; //number of bytes received
-          bzero(buf, sizeof(buf));
           //receive size from directory and loop to read directory
-          if((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
-            printf("Error receiving!\n");
-            exit(1);
-          } 
- 
           //loop to show directory listing
 
         } else if (!strcmp(operation_buf,"MKD")) {
@@ -239,10 +234,10 @@ int main(int argc, const char* argv[]){
             printf("What is the directory name you would like to create? ");
             scanf("%s", directory_name);
             dir_length = strlen(directory_name);
-            snprintf(dir_length_str, 4096, "%d", dir_length); //convert int to str
-        
+
+            dir_length = htons(dir_length);        
             //send the directory name length
-            if ((send_val = send(s, dir_length_str, strlen(dir_length_str) ,0)) < 0){
+            if ((send_val = send(s, &dir_length, sizeof(short int) ,0)) < 0){
                 printf("Error writing file length to the server\n");
                 exit(1);
             }
@@ -252,18 +247,18 @@ int main(int argc, const char* argv[]){
                 printf("Error writing the file length to the server\n");
                 exit(1);
             }
-            int rec_bytes; //number of bytes received
-            bzero(buf, sizeof(buf));
+
             //receive confirm from server
-            if ((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+            if ((rec_bytes = recv(s, &response, sizeof(int), 0)) < 0){
                 printf("Error receiving!\n");
                 exit(1);
             }
+            response = ntohl(response);
 
             //check confirms for return message
-            if(!strcmp(buf, "-2")){
+            if(response == -2){
                 printf("The directory already exists on server!\n");
-            } else if (!strcmp(buf, "-1")){
+            } else if (response == -1){
                 printf("Error in making directory\n");
             } else {
                 printf("The directory was successfully made\n");

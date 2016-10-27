@@ -107,6 +107,7 @@ int main(int argc, char* argv[]) {
   FILE* fp;
   int file_size;
   int read;
+  int response;
 
   // wait to get a connection request from a client
   while (1) {
@@ -166,7 +167,7 @@ int main(int argc, char* argv[]) {
         //memset((char*)&buf,0,sizeof(buf));
         //sprintf(buf,"%i",file_size);
         file_size = htonl(file_size);
-        if ((num_sent = send(new_s,file_size,sizeof(int),0)) == -1) {
+        if ((num_sent = send(new_s,&file_size,sizeof(int),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
@@ -247,15 +248,14 @@ int main(int argc, char* argv[]) {
          *  MK DIR OPERATION
          *
          **********************************/
-        memset((char*)&buf,0,sizeof(buf));
         printf("Client opeartion: MKD\n");
+        
         // receive directory name length
-        memset((char*)&buf,0,sizeof(buf));
-        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+        if ((num_rec = recv(new_s,&fname_length,sizeof(short int),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
-        fname_length = atoi(buf);
+        fname_length = ntohs(fname_length);
         printf("\tDirectory name length: %i\n",fname_length);
         // use length to set mem for fname
         fname = (char*)malloc(fname_length);
@@ -275,17 +275,17 @@ int main(int argc, char* argv[]) {
           // send back -2 if directory already exists
           if (errno == EEXIST) {
             printf("Directory already exists\n");
-            sprintf(buf,"%i",-2);
+            response = htonl(-2);
           // send back -1 if theres another error
           } else {
-            sprintf(buf,"%i",-1);
+            response = htonl(-1);
           }
         } else {
           // send back 1 if directory is created successfully
-          sprintf(buf,"%i",1);
+          response = htonl(1);
         }
         // send response message
-        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+        if ((num_sent = send(new_s,&response,sizeof(int),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
