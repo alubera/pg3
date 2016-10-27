@@ -257,19 +257,22 @@ int main(int argc, char* argv[]) {
         }
         fname_length = ntohs(fname_length);
         printf("\tDirectory name length: %i\n",fname_length);
+
         // use length to set mem for fname
-        fname = (char*)malloc(fname_length);
+        fname = (char*)malloc(fname_length+2);
         memset(fname,0,fname_length);
+
         // receive directory name string
         memset((char*)&buf,0,sizeof(buf));
-        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+        if ((num_rec = recv(new_s,buf,fname_length,0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
         strcpy(fname,"./");
-        strcat(fname,buf);
+        strncat(fname,buf,fname_length);
         printf("\tDirectory name: %s\n",fname);
         memset((char*)&buf,0,sizeof(buf));
+
         // use mkdir to make directory
         if (mkdir(fname,S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) < 0) {
           // send back -2 if directory already exists
@@ -284,6 +287,7 @@ int main(int argc, char* argv[]) {
           // send back 1 if directory is created successfully
           response = htonl(1);
         }
+
         // send response message
         if ((num_sent = send(new_s,&response,sizeof(int),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
@@ -297,77 +301,75 @@ int main(int argc, char* argv[]) {
          *  RM DIR OPERATION
          *
          **********************************/
-        memset((char*)&buf,0,sizeof(buf));
         printf("Client opeartion: RMD\n");
+
         // receive directory name length
-        memset((char*)&buf,0,sizeof(buf));
-        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+        if ((num_rec = recv(new_s,&fname_length,sizeof(short int),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
-        fname_length = atoi(buf);
+        fname_length = ntohs(fname_length);
         printf("\tDirectory name length: %i\n",fname_length);
+
         // use length to set mem for fname
-        fname = (char*)malloc(fname_length);
+        fname = (char*)malloc(fname_length+2);
         memset(fname,0,fname_length);
+
         // receive directory name string
         memset((char*)&buf,0,sizeof(buf));
-        if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
+        if ((num_rec = recv(new_s,buf,fname_length,0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
         strcpy(fname,"./");
-        strcat(fname,buf);
-        strcat(fname,"/");
+        strncat(fname,buf,fname_length);
         printf("\tDirectory name: %s\n",fname);
         memset((char*)&buf,0,sizeof(buf));
+
         // check to see if directory exists
-        if (access(fname,F_OK) != 0) {
-          if (errno == ENOENT || errno == ENOTDIR) {
-            // name provided is not a directory
-            sprintf(buf,"%i",-1);
-          } else {
-            // directory exists
-            sprintf(buf,"%i",1);
-          }
+        if (access(fname,F_OK) < 0) {
+          // could not access directory
+          response = htonl(-1);
+          printf("name is not a directory\n");
         } else {
-          // some other error accessing directory
-          sprintf(buf,"%i",-1);
+          // directory exists
+          response = htonl(1);
+          printf("directory exists\n");
         }
+
         // send confirm message
-        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+        if ((num_sent = send(new_s,&response,sizeof(response),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
+
         memset((char*)&buf,0,sizeof(buf));
         // receive confirmation that client wants to delete
         if ((num_rec = recv(new_s,buf,sizeof(buf)/sizeof(char),0)) == -1) {
           fprintf(stderr,"ERROR: receive error\n");
           exit(1);
         }
-        /*if () {
+        if (!strcmp(buf,"No")) {
           // user DOES NOT want to continue with delete
           continue;
-        }*/
+        }
+        
+        memset((char*)&buf,0,sizeof(buf));
         // use rmdir to remove directory
         if (rmdir(fname) < 0) {
-          // send back -2 if directory already exists
-          if (errno == EEXIST) {
-            printf("Directory already exists\n");
-            sprintf(buf,"%i",-2);
-          // send back -1 if theres another error
-          } else {
-            sprintf(buf,"%i",-1);
-          }
+          // if rmdir returns < 0 then there was a problem deleting the directory
+          strcpy(buf,"Failed to delete directory");
         } else {
-          // send back 1 if directory is created successfully
-          sprintf(buf,"%i",1);
+          // otherwise directory deleted successfully
+          strcpy(buf,"Directory deleted");
         }
+
         // send response message
         if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
+
         free(fname);
 
       } else if (!strcmp(buf,"CHD")) {
