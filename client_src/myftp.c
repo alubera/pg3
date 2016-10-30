@@ -174,7 +174,8 @@ int main(int argc, const char* argv[]){
             float throughput;
             //get throughput in MB
             //receive the hash of the file and save
-            throughput = file_size/((int)diff.tv_sec*10^6+(int)diff.tv_usec);
+            throughput = file_size*1.0/((int)diff.tv_sec*10^6+(int)diff.tv_usec);
+            printf("%i\t%i\n",file_size,(int)diff.tv_sec*10^6+(int)diff.tv_usec);
             char md5_hash_s[16]; 
             if((rec_bytes = recv(s, md5_hash_s, sizeof(md5_hash_s), 0)) < 0){
                 printf("Error receiving hash\n");
@@ -285,6 +286,7 @@ int main(int argc, const char* argv[]){
            }
 
             char throughput_rec[4096];
+            memset((char*)&throughput_rec,0,sizeof(throughput_rec));
             //recieve throughput and output -1 will be
             if ((rec_bytes = recv(s, &throughput_rec, sizeof(throughput_rec) , 0)) < 0){
                 printf("Throughput received failed\n");
@@ -337,7 +339,7 @@ int main(int argc, const char* argv[]){
             } else{
                 while(1){
                     char delete_confirm[5];
-                    printf("Are you sure you want to delete this file\n");
+                    printf("Are you sure you want to delete this file? Yes or No?\n");
                     scanf("%s", delete_confirm);
                     if(!strcmp(delete_confirm, "Yes")){
                         if((send_val = send(s, "Yes", 3, 0)) < 0){
@@ -427,7 +429,7 @@ int main(int argc, const char* argv[]){
             short int dir_length;
             char dir_length_str[4096];
 
-            printf("What is the directory name you would like to remove?");
+            printf("What is the directory name you would like to remove?\n");
             scanf("%s", directory_name);
             dir_length = strlen(directory_name);
             dir_length = htons(dir_length);

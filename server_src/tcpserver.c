@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
         // result should be in megabytes per second
         // bytes per microsecond == megabytes per second, avoid dividing by small decimal
         timersub(&t_rec,&t_sent,&t_diff);
-        float throughput = file_size/((int)t_diff.tv_sec*10^6+(int)t_diff.tv_usec);
+        float throughput = file_size*1.0/((int)t_diff.tv_sec*10^6+(int)t_diff.tv_usec);
 
         // compute MD5 hash string and compare them
         mhash_deinit(td,hash);
@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
         }
 
         // send response message
-        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+        if ((num_sent = send(new_s,buf,sizeof(buf),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
@@ -530,7 +530,7 @@ int main(int argc, char* argv[]) {
         }
 
         // send response message
-        if ((num_sent = send(new_s,buf,strlen(buf),0)) == -1) {
+        if ((num_sent = send(new_s,buf,sizeof(buf),0)) == -1) {
           fprintf(stderr,"ERROR: send error\n");
           exit(1);         
         }
