@@ -36,7 +36,7 @@ int main(int argc, const char* argv[]){
     int s; //socket return code    
     char buf[4096];
     struct sockaddr_in client_addr;      
-    struct timeval begin, end;
+    struct timeval begin, end, diff;
      
     //creating the socket
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0){
@@ -80,7 +80,6 @@ int main(int argc, const char* argv[]){
         fflush(stdout);
 
         bzero(operation_buf, sizeof(operation_buf));
-        //fgets(operation_buf, 4, stdin); //put request into buffer
         scanf("%s",operation_buf);
 
 
@@ -93,11 +92,7 @@ int main(int argc, const char* argv[]){
         if (!strcmp(operation_buf, "REQ")){ 
             printf("What is the file name you want to request?\n");
             scanf("%s", file_name);
-            //fgets(file_name, 4096, stdin);
             name_length = strlen(file_name);
-            //snprintf(name_length_str, 4096, "%d", name_length); //convert int to str
-            printf("%i %s\n", name_length, file_name);
-            fflush(stdout); 
 
             //send the file name length
             name_length = htons(name_length);
@@ -121,7 +116,6 @@ int main(int argc, const char* argv[]){
             }
             file_size = ntohl(file_size);
 
-            printf("received: %i\n", file_size);
 
             if(file_size == -1) {
                 printf("File does not exist on the server\n");
@@ -151,7 +145,6 @@ int main(int argc, const char* argv[]){
             int rec_count = 0;
             int j;
             while(1){
-                fflush(stdout);
 
                 if(file_size - total_rec < 4096){
                     rec_size = file_size - total_rec;
@@ -166,39 +159,30 @@ int main(int argc, const char* argv[]){
                     exit(1);
                 }
                 rec_count++;
-                //printf("recieved2: %i\n", rec_bytes); 
-                fflush(stdout);
                 total_rec = total_rec + rec_bytes;
                
                 mhash(td,buf,rec_size); 
-                //append new text to the file
-                //fprintf(f, "%s", buf);
                 fwrite(buf, sizeof(char), rec_bytes, f);             
 
-               // printf("String length of buf: %i ",strlen(buf));
                 if(total_rec >= file_size){
                     break;
                 }
             }
-            printf("RC: %i", rec_count);
             mhash_deinit(td, md5_hash_c); 
             gettimeofday(&end,NULL);
-            int time = end.tv_usec - begin.tv_usec;
+            timersub(&end, &begin, &diff);
             float throughput;
-            printf("Time: %i file_size: %i", time, file_size);
-            throughput = file_size/time;
+            //get throughput in MB
             //receive the hash of the file and save
+            throughput = file_size/((int)diff.tv_sec*10^6+(int)diff.tv_usec);
             char md5_hash_s[16]; 
             if((rec_bytes = recv(s, md5_hash_s, sizeof(md5_hash_s), 0)) < 0){
                 printf("Error receiving hash\n");
                 exit(1);
             }
 
-            //printf("Received hash bytes: %i", rec_bytes);
             fclose(f); 
            
-            //printf("Client hash: %i, Server hash: %i", strlen(md5_hash_c), strlen(md5_hash_s)); 
-            //printf("Client hash: %s, Server hash: %s", md5_hash_c, md5_hash_s);
             int i;
             //compare hashes
             for (i=0; i<16; i++){
@@ -210,20 +194,20 @@ int main(int argc, const char* argv[]){
     
             if(i == 16){
                 printf("File transfer successful\n");
-                printf("The throughput was %f bytes per sec\n", throughput*1000000);
+                printf("The throughput was %f megabytes per sec\n", throughput);
             }
-            printf("%s server hash:%s\n", md5_hash_c, md5_hash_s);
-
         } else if (!strcmp(operation_buf,"UPL")) {
             char file_name[4096];
-            short int file_size;
-            printf("What is the file name you would like to upload?");
+            short int file_length;
+            printf("What is the file name you would like to upload?\n");
             scanf("%s", file_name);
-            file_size = strlen(file_name);
-            file_size = htons(file_size);
+            file_length = strlen(file_name);
+            file_length = htons(file_length);
+            MHASH td;
+            int file_size;
 
             //send length of the file name
-            if ((send_val = send(s, &file_size, sizeof(short int), 0)) < 0){
+            if ((send_val = send(s, &file_length, sizeof(short int), 0)) < 0){
                 printf("Error sending file name length\n");
                 exit(1);
             }
@@ -233,8 +217,7 @@ int main(int argc, const char* argv[]){
                 printf("Error sending file name\n");
                 exit(1);
             }
-
-            short int ack;
+            short int ack = 0;
 
             //receive 1-short int for acknowledgement
             if ((rec_bytes = recv(s, &ack, sizeof(short int), 0)) <0){
@@ -242,11 +225,144 @@ int main(int argc, const char* argv[]){
                 exit(1);
             }
 
-            //find file and send size
+            ack = ntohs(ack);
 
-  
+            if (ack != 1){
+                printf("Server did not send ACK...going back to main menu\n");
+                continue;    
+            }
+            FILE* fp;
+            //find file and send size
+            if ((fp = fopen(file_name, "r")) != NULL){
+                //use fseek to get the file size
+                fseek(fp,0,SEEK_END);
+                file_size = ftell(fp);
+                fseek(fp,0,SEEK_SET);
+            } else{
+                //file doesnt exist send error resp
+                file_size = -1;
+                printf("Error file doesn't exist\n");
+                continue;
+            }
+
+            file_size = htonl(file_size);
+            if ((send_val = send(s, &file_size, sizeof(int),0)) == -1){
+                fprintf(stderr, "ERROR: send error\n");
+                exit(1);
+            } 
+
+            file_size = ntohl(file_size);
+            if (file_size == -1) continue;
+            
+            char hash[16];
+            //init mhash
+            if ((td = mhash_init(MHASH_MD5)) == MHASH_FAILED) {
+                fprintf(stderr,"ERROR: unable to initialize MHASH\n");
+                exit(1);
+            }
+
+            //read file into buffer, 4096 chars at a time
+            //send each buffer as well as adding to MD5 hash
+
+            int count = 0;
+            int read;
+            memset((char*)&buf,0,sizeof(buf));
+            while ((read = fread(buf, sizeof(char), sizeof(buf), fp)) > 0){
+                if ((send_val = send(s, buf, read, 0)) == -1){
+                    fprintf(stderr,"ERROR: send error\n");
+                    exit(1);
+                }
+
+                mhash(td,buf,read);
+                memset((char*)&buf,0,sizeof(buf));
+            }
+
+            //compute md5 hash string and send
+            mhash_deinit(td,hash);
+            if ((send_val = send(s, hash,sizeof(hash), 0)) == -1){
+                fprintf(stderr,"ERROR: send error\n");
+                exit(1);
+           }
+
+            char throughput_rec[4096];
+            //recieve throughput and output -1 will be
+            if ((rec_bytes = recv(s, &throughput_rec, sizeof(throughput_rec) , 0)) < 0){
+                printf("Throughput received failed\n");
+                exit(1);
+            }
+            
+            if (!strcmp(throughput_rec,"-1")){
+                printf("Unsuccessful upload\n");
+                continue;
+            } else{
+                printf("Successful upload\n");
+                printf("Throughput was %s megabytes per second\n", throughput_rec);
+            } 
+              
+            fclose(fp);
+
         } else if (!strcmp(operation_buf,"DEL")) {
 
+            short int file_length;
+            char file_name[4096];
+            
+            printf("What is the file name you would like to delete?\n");
+            scanf("%s", file_name);
+
+            file_length = strlen(file_name);
+            file_length = htons(file_length);
+            //send file name length
+            if ((send_val = send(s, &file_length, sizeof(short int), 0)) <0){
+                printf("Error sending file name length\n");
+                exit(1);
+            }
+
+            //send file name
+            if ((send_val = send(s, file_name, sizeof(file_name), 0)) < 0){ 
+                printf("Error sending file name\n");
+                exit(1);
+            }
+
+            int confirm;
+            //receive confirm from server
+            if ((rec_bytes = recv(s, &confirm, sizeof(int), 0)) < 0){
+                printf("Error receiving confirm from server\n");
+                exit(1);
+            }
+            
+            confirm = ntohl(confirm);
+            if (confirm == -1){
+                printf("File doesn't exist\n");
+                continue;
+            } else{
+                while(1){
+                    char delete_confirm[5];
+                    printf("Are you sure you want to delete this file\n");
+                    scanf("%s", delete_confirm);
+                    if(!strcmp(delete_confirm, "Yes")){
+                        if((send_val = send(s, "Yes", 3, 0)) < 0){
+                            printf("Error sending to server\n");
+                            exit(1);
+                        }
+                        bzero(buf, sizeof(buf));
+                        if ((rec_bytes = recv(s, buf, sizeof(buf), 0)) < 0){
+                            printf("Error receiving!\n");
+                            exit(1);
+                        }
+                        printf("%s", buf);
+                        break;
+                    } else if (!strcmp(delete_confirm, "No")){
+                        printf("Delete abandoned by the user!\n");
+                        if((send_val = send(s, "No", 2, 0)) < 0){
+                            printf("Error sending to the server\n");
+                            exit(1);
+                        }
+                        break;
+                }else{
+                    printf("You did not enter a valid response, try again\n");
+                }
+            }
+        }
 
         } else if (!strcmp(operation_buf,"LIS")){
 
@@ -336,12 +452,12 @@ int main(int argc, const char* argv[]){
                 exit(1);
             }
        
-            //printf("Received: %i", resp); 
             resp = ntohl(resp);
             char confirm[5];
             //check confirms for return message
             if(resp == -1){
                 printf("The directory does not exist on server!\n");
+                continue;
             } else {
                 while(1){
                     printf("Are you sure you want to delete the directory? Yes or No? \n");
@@ -363,6 +479,10 @@ int main(int argc, const char* argv[]){
 
                     } else if (!strcmp(confirm, "No")){
                         printf("Delete abandoned by the user!\n");
+                        if((send_val = send(s, "No", 2, 0)) < 0){
+                            printf("Error sending to the server\n");
+                            exit(1);
+                        }
                         break;
                     } else{
                         printf("You did not enter a valid response, try again\n");
@@ -393,7 +513,7 @@ int main(int argc, const char* argv[]){
 
             int resp1;
             if ((rec_bytes = recv(s, &resp1, sizeof(int), 0)) < 0){
-                printf("Erro receiving!\n");
+                printf("Error receiving!\n");
                 exit(1);
             }
 
@@ -412,6 +532,8 @@ int main(int argc, const char* argv[]){
             close(s);
             printf("Session has been closed, have a nice day.\n");
             break;
+        } else {
+            printf("Command not recognized, try again\n");
         }
     }
 
